@@ -277,9 +277,8 @@ export function AdminDashboard({ initialWorks }: { initialWorks: Work[] }) {
     if (data) setWorks(data);
   };
 
-  const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    // Auth disabled temporarily for preview
     router.push("/");
   };
 

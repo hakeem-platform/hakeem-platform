@@ -1,10 +1,10 @@
-import { updateSession } from '@/lib/supabase/middleware'
-import { type NextRequest } from 'next/server'
+import { type NextRequest, NextResponse } from "next/server";
 
+// Authentication disabled temporarily for preview
 export async function middleware(request: NextRequest) {
-  return await updateSession(request)
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/auth/:path*', '/protected/:path*'],
-}
+  matcher: ["/admin/:path*", "/auth/:path*"],
+};
