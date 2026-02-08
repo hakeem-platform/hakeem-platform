@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react"
+import React from "react";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -59,12 +59,14 @@ function WorkForm({
   const [details, setDetails] = useState(work?.details || "");
   const [category, setCategory] = useState(work?.category || "general");
   const [isFeatured, setIsFeatured] = useState(work?.is_featured || false);
-  const [imageUrls, setImageUrls] = useState(
-    work?.images?.join("\n") || ""
-  );
-  const [fileUrls, setFileUrls] = useState(work?.files?.join("\n") || "");
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [fileFiles, setFileFiles] = useState<File[]>([]);
+  const [existingImages, setExistingImages] = useState(work?.images || []);
+  const [existingFiles, setExistingFiles] = useState(work?.files || []);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState(work?.images.join("\n") || "");
+  const [fileUrls, setFileUrls] = useState(work?.files.join("\n") || "");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,27 +75,55 @@ function WorkForm({
 
     const supabase = createClient();
 
-    const images = imageUrls
-      .split("\n")
-      .map((u) => u.trim())
-      .filter(Boolean);
-    const files = fileUrls
-      .split("\n")
-      .map((u) => u.trim())
-      .filter(Boolean);
-
-    const payload = {
-      title,
-      description,
-      details: details || null,
-      images,
-      files,
-      category,
-      is_featured: isFeatured,
-      updated_at: new Date().toISOString(),
-    };
-
     try {
+      let finalImages = [...existingImages];
+      let finalFiles = [...existingFiles];
+
+      // Upload new images
+      for (const file of imageFiles) {
+        const timestamp = Date.now();
+        const filename = `${timestamp}-${Math.random().toString(36).substring(7)}-${file.name}`;
+        const { data, error: uploadError } = await supabase.storage
+          .from("works")
+          .upload(`images/${filename}`, file);
+
+        if (uploadError) throw uploadError;
+        if (data) {
+          const { data: urlData } = supabase.storage
+            .from("works")
+            .getPublicUrl(`images/${filename}`);
+          finalImages.push(urlData.publicUrl);
+        }
+      }
+
+      // Upload new files
+      for (const file of fileFiles) {
+        const timestamp = Date.now();
+        const filename = `${timestamp}-${Math.random().toString(36).substring(7)}-${file.name}`;
+        const { data, error: uploadError } = await supabase.storage
+          .from("works")
+          .upload(`files/${filename}`, file);
+
+        if (uploadError) throw uploadError;
+        if (data) {
+          const { data: urlData } = supabase.storage
+            .from("works")
+            .getPublicUrl(`files/${filename}`);
+          finalFiles.push(urlData.publicUrl);
+        }
+      }
+
+      const payload = {
+        title,
+        description,
+        details: details || null,
+        images: finalImages,
+        files: finalFiles,
+        category,
+        is_featured: isFeatured,
+        updated_at: new Date().toISOString(),
+      };
+
       if (work) {
         const { error: err } = await supabase
           .from("works")
@@ -182,31 +212,122 @@ function WorkForm({
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground">
-                {"روابط الصور (كل رابط في سطر)"}
-              </Label>
-              <textarea
-                value={imageUrls}
-                onChange={(e) => setImageUrls(e.target.value)}
-                placeholder={"https://example.com/image1.jpg\nhttps://example.com/image2.jpg"}
-                rows={3}
-                className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                dir="ltr"
-              />
+              <Label className="text-foreground">الصور (اختياري)</Label>
+              <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    setImageFiles([...imageFiles, ...files]);
+                  }}
+                  className="hidden"
+                  id="images-input"
+                />
+                <label htmlFor="images-input" className="cursor-pointer">
+                  <div className="text-sm text-muted-foreground">
+                    انقر لاختيار صور أو اسحب وأفلت
+                  </div>
+                </label>
+              </div>
+              {(imageFiles.length > 0 || existingImages.length > 0) && (
+                <div className="space-y-2">
+                  {existingImages.map((img, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-2 bg-muted rounded-lg text-sm"
+                    >
+                      <span className="truncate text-foreground">صورة موجودة {idx + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExistingImages(existingImages.filter((_, i) => i !== idx))
+                        }
+                        className="text-destructive hover:text-destructive/80"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {imageFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-2 bg-muted rounded-lg text-sm"
+                    >
+                      <span className="truncate text-foreground">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setImageFiles(imageFiles.filter((_, i) => i !== idx))
+                        }
+                        className="text-destructive hover:text-destructive/80"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground">
-                {"روابط الملفات المرفقة (اختياري - كل رابط في سطر)"}
-              </Label>
-              <textarea
-                value={fileUrls}
-                onChange={(e) => setFileUrls(e.target.value)}
-                placeholder={"https://example.com/file1.pdf\nhttps://example.com/file2.docx"}
-                rows={2}
-                className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                dir="ltr"
-              />
+              <Label className="text-foreground">الملفات المرفقة (اختياري)</Label>
+              <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    setFileFiles([...fileFiles, ...files]);
+                  }}
+                  className="hidden"
+                  id="files-input"
+                />
+                <label htmlFor="files-input" className="cursor-pointer">
+                  <div className="text-sm text-muted-foreground">
+                    انقر لاختيار ملفات أو اسحب وأفلت
+                  </div>
+                </label>
+              </div>
+              {(fileFiles.length > 0 || existingFiles.length > 0) && (
+                <div className="space-y-2">
+                  {existingFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-2 bg-muted rounded-lg text-sm"
+                    >
+                      <span className="truncate text-foreground">ملف موجود {idx + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExistingFiles(existingFiles.filter((_, i) => i !== idx))
+                        }
+                        className="text-destructive hover:text-destructive/80"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {fileFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-2 bg-muted rounded-lg text-sm"
+                    >
+                      <span className="truncate text-foreground">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFileFiles(fileFiles.filter((_, i) => i !== idx))
+                        }
+                        className="text-destructive hover:text-destructive/80"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
