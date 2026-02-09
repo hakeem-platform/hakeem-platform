@@ -55,7 +55,6 @@ export function HeroSection() {
               data-animate
               className="opacity-0 inline-flex items-center gap-2 rounded-full bg-primary/10 px-5 py-2.5 text-sm font-semibold text-primary border border-primary/20"
             >
-              <Sparkles className="h-4 w-4" />
               <span>متخصصون في كل الجامعات السعودية</span>
             </div>
 
